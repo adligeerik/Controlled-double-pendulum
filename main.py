@@ -4,6 +4,10 @@ from sympy.printing.latex import latex
 import sympy as sp
 from sympy import sin, cos, Function
 
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+
 # Create all parameters
 t = sp.symbols('t')
 g = sp.symbols('g')
@@ -19,11 +23,11 @@ theta_1 = Function('theta_1')
 theta_2 = Function('theta_2')
 
 # The equations for position in cartesian coordinates
-x_1 = l_1*sin(theta_1(t)) + l_2*sin(theta_2(t))
-y_1 = l_1*cos(theta_1(t)) + l_2*cos(theta_2(t))
-
 x_2 = l_2*sin(theta_2(t))
 y_2 = l_2*cos(theta_2(t))
+
+x_1 = l_1*sin(theta_1(t)) + x_2
+y_1 = l_1*cos(theta_1(t)) + y_2
 
 # Find the velocities by differential
 x_dot_1 = sp.diff(x_1, t)
@@ -37,8 +41,8 @@ x_dot_2 = sp.simplify(x_dot_2)
 y_dot_2 = sp.simplify(y_dot_2)
 
 # Define the potential energy part of the Lagrangeian
-P_1 = -m_1*g*y_1
-P_2 = -m_2*g*y_2
+P_1 = m_1*g*y_1
+P_2 = m_2*g*y_2
 V = P_1 + P_2
 
 # Define the momentum part of the Lagrangeian
@@ -59,12 +63,77 @@ d_2_1 = sp.diff(sp.diff(L, 'Derivative(theta_2(t), t)'), 't')
 d_1_2 = sp.diff(L, 'theta_1(t)')
 d_2_2 = sp.diff(L, 'theta_2(t)')
 
-# Solve for d^2/dt^2 of theta_1
-theta_ddot_1 = sp.solve(d_1_1 - d_1_2, 'Derivative(theta_1(t), (t,2))')
+L_theta1 = d_1_1 - d_1_2
+L_theta2 = d_2_1 - d_2_2
+
+# Solve for d^2/dt^2 of theta_i
+theta_ddot_1 = sp.solve(L_theta1, 'Derivative(theta_1(t), (t,2))')
 theta_ddot_1 = sp.simplify(theta_ddot_1[0])
 
-theta_ddot_2 = sp.solve(d_2_1 - d_2_2, 'Derivative(theta_2(t), (t,2))')
+theta_ddot_2 = sp.solve(L_theta2, 'Derivative(theta_2(t), (t,2))')
 theta_ddot_2 = sp.simplify(theta_ddot_2[0])
 
-print(latex(theta_ddot_1))
-print(latex(theta_ddot_2))
+# print(latex(theta_ddot_1))
+# print(latex(theta_ddot_2))
+
+# State vector is x_bar = [x1, x2, x3, x4] = [theta_1, theata_2, theta_dot_1, theta_dot_2]
+
+# Change variables
+theta1, theta2, omega1, omega2, omega1_dot, omega2_dot = sp.symbols('theta1 theta2 omega1 omega2 omega1_dot omega2_dot')
+change = {theta_1(t): theta1, theta_2(t): theta2, sp.Derivative(theta_1(t), t): omega1, sp.Derivative(theta_2(t), t): omega2, sp.Derivative(theta_1(t), (t,2)): omega1_dot, sp.Derivative(theta_2(t), (t,2)): omega2_dot}
+L_theta1 = L_theta1.subs(change)
+L_theta2 = L_theta2.subs(change)
+
+eq_omega1_dot = sp.simplify(sp.solve(L_theta1, omega1_dot)[0])
+eq_omega2_dot = sp.simplify(sp.solve(L_theta2.subs({omega1_dot: eq_omega1_dot}), omega2_dot)[0])
+# eq_omega1_dot = sp.simplify(sp.solve(L_theta1.subs({omega2_dot: eq_omega2_dot}), omega1_dot)[0])
+eq_omega1_dot = sp.simplify(eq_omega1_dot.subs({omega2_dot: eq_omega2_dot}))
+
+sub_values = {g: 9.82, l_1: 1, l_2: 1, m_1: 1, m_2:1}
+eq_omega1_dot = eq_omega1_dot.subs(sub_values)
+eq_omega2_dot = eq_omega2_dot.subs(sub_values)
+
+dt = 0.001
+
+x_dot = np.zeros(4)
+x0 = np.array([np.pi-0.1, np.pi, 0, 0])
+x = x0
+
+x_out = np.array(x)
+for i in range(2000):
+    print(i)
+    x_val = {theta1: x[0], theta2: x[1], omega1: x[2], omega2: x[3]}
+
+    x_dot[0] = x_val[omega1]
+    x_dot[1] = x_val[omega2]
+    x_dot[2] = eq_omega1_dot.subs(x_val)
+    x_dot[3] = eq_omega2_dot.subs(x_val)
+
+    x = x + dt * x_dot
+    x_out = np.vstack([x_out, x])
+
+theta_1 = x_out[:,0]
+theta_2 = x_out[:,1]
+
+x2_pos = sub_values[l_2] * np.sin(theta_2)
+y2_pos = sub_values[l_2] * np.cos(theta_2)
+
+x1_pos = sub_values[l_1] * np.sin(theta_1) + x2_pos
+y1_pos = sub_values[l_1] * np.cos(theta_1) + y2_pos
+
+# plt.plot(theta_1, label='theta_1')
+# plt.plot(theta_2, label='theta_2')
+# plt.legend()
+
+fig = plt.figure(figsize=(5, 4))
+ax = fig.add_subplot(autoscale_on=False, xlim=(-3, 3), ylim=(-3, 3))
+line, = ax.plot([], [], 'o-', lw=2)
+
+def animate(i):
+    thisx = [x1_pos[i], x2_pos[i], 0]
+    thisy = [y1_pos[i], y2_pos[i], 0]
+    line.set_data(thisx, thisy)
+    return line
+
+ani = animation.FuncAnimation(fig, animate, len(x1_pos), interval=dt, blit=False)
+plt.show()
