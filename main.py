@@ -7,6 +7,7 @@ from sympy import sin, cos, Function
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import time
 
 # Create all parameters
 t = sp.symbols('t')
@@ -76,8 +77,6 @@ theta_ddot_2 = sp.simplify(theta_ddot_2[0])
 # print(latex(theta_ddot_1))
 # print(latex(theta_ddot_2))
 
-# State vector is x_bar = [x1, x2, x3, x4] = [theta_1, theata_2, theta_dot_1, theta_dot_2]
-
 # Change variables
 theta1, theta2, omega1, omega2, omega1_dot, omega2_dot = sp.symbols('theta1 theta2 omega1 omega2 omega1_dot omega2_dot')
 change = {theta_1(t): theta1, theta_2(t): theta2, sp.Derivative(theta_1(t), t): omega1, sp.Derivative(theta_2(t), t): omega2, sp.Derivative(theta_1(t), (t,2)): omega1_dot, sp.Derivative(theta_2(t), (t,2)): omega2_dot}
@@ -96,21 +95,25 @@ eq_omega2_dot = eq_omega2_dot.subs(sub_values)
 dt = 0.001
 
 x_dot = np.zeros(4)
-x0 = np.array([np.pi-0.1, np.pi, 0, 0])
+x0 = np.array([np.pi/2, np.pi/2, 0, 0])
 x = x0
 
+start = time.time()
 x_out = np.array(x)
-for i in range(2000):
+for i in range(500):
     print(i)
     x_val = {theta1: x[0], theta2: x[1], omega1: x[2], omega2: x[3]}
 
     x_dot[0] = x_val[omega1]
     x_dot[1] = x_val[omega2]
-    x_dot[2] = eq_omega1_dot.subs(x_val)
-    x_dot[3] = eq_omega2_dot.subs(x_val)
+    x_dot[2] = eq_omega1_dot.xreplace(x_val)
+    x_dot[3] = eq_omega2_dot.xreplace(x_val)
 
     x = x + dt * x_dot
     x_out = np.vstack([x_out, x])
+
+end = time.time()
+print(end - start)
 
 theta_1 = x_out[:,0]
 theta_2 = x_out[:,1]
@@ -130,10 +133,10 @@ ax = fig.add_subplot(autoscale_on=False, xlim=(-3, 3), ylim=(-3, 3))
 line, = ax.plot([], [], 'o-', lw=2)
 
 def animate(i):
-    thisx = [x1_pos[i], x2_pos[i], 0]
-    thisy = [y1_pos[i], y2_pos[i], 0]
+    thisx = [x1_pos[i*20], x2_pos[i*20], 0]
+    thisy = [y1_pos[i*20], y2_pos[i*20], 0]
     line.set_data(thisx, thisy)
     return line
 
-ani = animation.FuncAnimation(fig, animate, len(x1_pos), interval=dt, blit=False)
+ani = animation.FuncAnimation(fig, animate, int(len(x1_pos)/20), interval=dt, blit=False)
 plt.show()
