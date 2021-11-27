@@ -83,31 +83,43 @@ change = {theta_1(t): theta1, theta_2(t): theta2, sp.Derivative(theta_1(t), t): 
 L_theta1 = L_theta1.subs(change)
 L_theta2 = L_theta2.subs(change)
 
-eq_omega1_dot = sp.simplify(sp.solve(L_theta1, omega1_dot)[0])
-eq_omega2_dot = sp.simplify(sp.solve(L_theta2.subs({omega1_dot: eq_omega1_dot}), omega2_dot)[0])
-# eq_omega1_dot = sp.simplify(sp.solve(L_theta1.subs({omega2_dot: eq_omega2_dot}), omega1_dot)[0])
-eq_omega1_dot = sp.simplify(eq_omega1_dot.subs({omega2_dot: eq_omega2_dot}))
+L_theta1 = sp.simplify(L_theta1)
+L_theta2 = sp.simplify(L_theta2)
+
+print(latex(L_theta1))
+print(latex(L_theta2))
+
+# Get the system on matrix form
+A, B = sp.linear_eq_to_matrix([L_theta1, L_theta2], [omega1_dot, omega2_dot])
+A_inv = sp.simplify(A.inv())
+omega_dot_mts = sp.simplify(A_inv @ B)
 
 sub_values = {g: 9.82, l_1: 1, l_2: 1, m_1: 1, m_2:1}
-eq_omega1_dot = eq_omega1_dot.subs(sub_values)
-eq_omega2_dot = eq_omega2_dot.subs(sub_values)
+omega_dot_mts = omega_dot_mts.subs(sub_values)
+eq_omega1_dot = omega_dot_mts[0]
+eq_omega2_dot = omega_dot_mts[1]
 
 dt = 0.001
 
 x_dot = np.zeros(4)
-x0 = np.array([np.pi/2, np.pi/2, 0, 0])
+# x0 = np.array([np.pi, np.pi, 0, 0])
+x0 = np.array([0, 0, 0, 0])
 x = x0
 
 start = time.time()
 x_out = np.array(x)
-for i in range(500):
+
+n = 4000
+u = np.sin(np.linspace(0,n,n+1)/200)
+
+for i in range(n):
     print(i)
     x_val = {theta1: x[0], theta2: x[1], omega1: x[2], omega2: x[3]}
 
     x_dot[0] = x_val[omega1]
     x_dot[1] = x_val[omega2]
     x_dot[2] = eq_omega1_dot.xreplace(x_val)
-    x_dot[3] = eq_omega2_dot.xreplace(x_val)
+    x_dot[3] = eq_omega2_dot.xreplace(x_val) + 5*u[i]
 
     x = x + dt * x_dot
     x_out = np.vstack([x_out, x])
@@ -127,6 +139,7 @@ y1_pos = sub_values[l_1] * np.cos(theta_1) + y2_pos
 # plt.plot(theta_1, label='theta_1')
 # plt.plot(theta_2, label='theta_2')
 # plt.legend()
+# plt.show()
 
 fig = plt.figure(figsize=(5, 4))
 ax = fig.add_subplot(autoscale_on=False, xlim=(-3, 3), ylim=(-3, 3))
