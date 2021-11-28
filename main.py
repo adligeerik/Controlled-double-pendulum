@@ -3,11 +3,14 @@ from sympy.printing.latex import latex
 
 import sympy as sp
 from sympy import sin, cos, Function
+from scipy.linalg import solve_continuous_are, inv
 
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import time
+
+from control import lqr, pzmap, StateSpace
 
 # Create all parameters
 t = sp.symbols('t')
@@ -93,16 +96,20 @@ L_theta2 = sp.simplify(L_theta2)
 M, F = sp.linear_eq_to_matrix([L_theta1, L_theta2], [omega1_dot, omega2_dot])
 A_cont = sp.simplify(sp.simplify(M.inv()) @ F)
 
-# Add theta 1 and 2 to compleate the system
-A_cont = A_cont.row_insert(0, sp.Matrix([theta1]))
-A_cont = A_cont.row_insert(1, sp.Matrix([theta2]))
+# Add omega 1 and 2 to compleate the system
+A_cont = A_cont.row_insert(0, sp.Matrix([omega1]))
+A_cont = A_cont.row_insert(1, sp.Matrix([omega2]))
 
 # Linearize (calc the jacobian)
 A_lin = A_cont.jacobian(sp.Matrix([theta1, theta2, omega1, omega2]))
-B_lin = sp.Matrix([[0],[0],[1],[0]])
+B_lin = sp.Matrix([[0],[0],[0],[1]])
+# C_lin = sp.Matrix([[1, 0, 0, 0],
+#                  [0, 1, 0 ,0]])
+C_lin = sp.Matrix([[1, 0, 0, 0]])
+D_lin= sp.Matrix([0])
 
 # Substitute parameters for values
-sub_values = {g: 9.82, l_1: 1, l_2: 1, m_1: 1, m_2:1}
+sub_values = {g: 9.82, l_1: 1, l_2: 1, m_1: 1, m_2: 1}
 A_lin = A_lin.subs(sub_values)
 omega_dot_mts = A_cont.subs(sub_values)
 eq_omega1_dot = omega_dot_mts[2]
@@ -110,34 +117,63 @@ eq_omega2_dot = omega_dot_mts[3]
 
 # Linearize around stationary point
 stationary_point = {theta1: 0, theta2: 0, omega1: 0, omega2: 0}
-A_lin.subs(stationary_point)
+A_stat = A_lin.subs(stationary_point)
 
+# Convert to numpy array from Matrix (sympy)
+A_stat = np.array(A_stat).astype(np.float64)
+B_stat = np.array(B_lin).astype(np.float64)
+C_stat = np.array(C_lin).astype(np.float64)
+D_stat = np.array(D_lin).astype(np.float64)
+
+# Plot pole zero map
+sys = StateSpace(A_stat, B_stat, C_stat, D_stat)
+# pzmap(sys, plot=True)
+# plt.show()
+
+# Calculate if the system is controllable
 AB = A_lin @ B_lin
 AAB = A_lin @ AB
 AAAB = A_lin @ AAB
 Controllability = sp.Matrix.hstack(B_lin, AB, AAB, AAAB)
+cont_val = Controllability.subs(stationary_point).evalf().det()
 
+# Check observability of system
+CA = C_lin @ A_lin
+CCA = CA @ A_lin
+CCCA = CCA @ A_lin
+Observability = sp.Matrix.vstack(C_lin, CA, CCA, CCCA)
+Observability = Observability.subs(stationary_point).evalf()
+Observability = np.array(Observability).astype(np.float64) # Convert to np array
+rank_observ = np.linalg.matrix_rank(Observability)
+# TODO check rank_observ == 4
+
+# Calc the continuous LQR controller
+Q = np.diag([1, 5, 1, 1])
+R = 1
+P = solve_continuous_are(a = A_stat, b = B_stat, q = Q, r = R)
+K = np.matrix((1/R)*(B_stat.T @ P))
+K = np.array(K).astype(np.float64) # Convert to np array
 dt = 0.001
 
 x_dot = np.zeros(4)
 # x0 = np.array([np.pi, np.pi, 0, 0])
-x0 = np.array([0.1, 0, 0, 0])
+x0 = np.array([0.05, 0, 0, 0])
 x = x0
 
 start = time.time()
 x_out = np.array(x)
 
 n = 10000
-u = np.sin(np.linspace(0,n,n+1)/200)
-
+u_t = []
 for i in range(n):
     print(i)
     x_val = {theta1: x[0], theta2: x[1], omega1: x[2], omega2: x[3]}
-
+    u = -K @ x
+    u_t.append(u)
     x_dot[0] = x_val[omega1]
     x_dot[1] = x_val[omega2]
     x_dot[2] = eq_omega1_dot.xreplace(x_val)
-    x_dot[3] = eq_omega2_dot.xreplace(x_val)
+    x_dot[3] = eq_omega2_dot.xreplace(x_val) + u
 
     x = x + dt * x_dot
     x_out = np.vstack([x_out, x])
@@ -158,6 +194,9 @@ y1_pos = sub_values[l_1] * np.cos(theta_1) + y2_pos
 # plt.plot(theta_2, label='theta_2')
 # plt.legend()
 # plt.show()
+
+plt.plot(u_t)
+plt.show()
 
 fig = plt.figure(figsize=(5, 4))
 ax = fig.add_subplot(autoscale_on=False, xlim=(-3, 3), ylim=(-3, 3))
