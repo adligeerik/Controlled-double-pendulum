@@ -3,7 +3,7 @@ from sympy.printing.latex import latex
 
 import sympy as sp
 from sympy import sin, cos, Function
-from scipy.linalg import solve_continuous_are, inv
+from scipy.linalg import solve_continuous_are, inv, eig
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -105,11 +105,11 @@ A_lin = A_cont.jacobian(sp.Matrix([theta1, theta2, omega1, omega2]))
 B_lin = sp.Matrix([[0],[0],[0],[1]])
 # C_lin = sp.Matrix([[1, 0, 0, 0],
 #                  [0, 1, 0 ,0]])
-C_lin = sp.Matrix([[1, 0, 0, 0]])
+C_lin = sp.Matrix([[0, 0, 0, 1]])
 D_lin= sp.Matrix([0])
 
 # Substitute parameters for values
-sub_values = {g: 9.82, l_1: 1, l_2: 1, m_1: 1, m_2: 1}
+sub_values = {g: 9.82, l_1: 2, l_2: 2, m_1: 1, m_2: 1}
 A_lin = A_lin.subs(sub_values)
 omega_dot_mts = A_cont.subs(sub_values)
 eq_omega1_dot = omega_dot_mts[2]
@@ -125,17 +125,14 @@ B_stat = np.array(B_lin).astype(np.float64)
 C_stat = np.array(C_lin).astype(np.float64)
 D_stat = np.array(D_lin).astype(np.float64)
 
-# Plot pole zero map
-sys = StateSpace(A_stat, B_stat, C_stat, D_stat)
-# pzmap(sys, plot=True)
-# plt.show()
-
 # Calculate if the system is controllable
 AB = A_lin @ B_lin
 AAB = A_lin @ AB
 AAAB = A_lin @ AAB
 Controllability = sp.Matrix.hstack(B_lin, AB, AAB, AAAB)
 cont_val = Controllability.subs(stationary_point).evalf().det()
+if np.abs(cont_val) < 0.01:
+    raise "Not controllable"
 
 # Check observability of system
 CA = C_lin @ A_lin
@@ -145,25 +142,39 @@ Observability = sp.Matrix.vstack(C_lin, CA, CCA, CCCA)
 Observability = Observability.subs(stationary_point).evalf()
 Observability = np.array(Observability).astype(np.float64) # Convert to np array
 rank_observ = np.linalg.matrix_rank(Observability)
-# TODO check rank_observ == 4
+if rank_observ != 4:
+    raise "System is not observable"
 
 # Calc the continuous LQR controller
-Q = np.diag([1, 5, 1, 1])
+Q = np.diag([1000, 1, 1, 1])
 R = 1
 P = solve_continuous_are(a = A_stat, b = B_stat, q = Q, r = R)
 K = np.matrix((1/R)*(B_stat.T @ P))
 K = np.array(K).astype(np.float64) # Convert to np array
+
+# Plot pole zero map
+sys = StateSpace(A_stat, B_stat, C_stat, D_stat)
+A_closed = A_stat - B_stat @ K
+e, f = eig(A_stat)
+w, v = eig(A_closed)
+
 dt = 0.001
 
 x_dot = np.zeros(4)
 # x0 = np.array([np.pi, np.pi, 0, 0])
-x0 = np.array([0.05, 0, 0, 0])
+x0 = np.array([0, 0, 0, 0])
 x = x0
 
 start = time.time()
 x_out = np.array(x)
 
-n = 10000
+n = 3000
+
+disturbance = np.zeros(n)
+disturbance[200:400] = 0.1
+# disturbance[2000:2400] = -0.1
+stop_u = np.ones(n)
+# stop_u[2000:-1] = 0
 u_t = []
 for i in range(n):
     print(i)
@@ -172,8 +183,8 @@ for i in range(n):
     u_t.append(u)
     x_dot[0] = x_val[omega1]
     x_dot[1] = x_val[omega2]
-    x_dot[2] = eq_omega1_dot.xreplace(x_val)
-    x_dot[3] = eq_omega2_dot.xreplace(x_val) + u
+    x_dot[2] = eq_omega1_dot.xreplace(x_val) + disturbance[i]
+    x_dot[3] = eq_omega2_dot.xreplace(x_val) + u * stop_u[i]
 
     x = x + dt * x_dot
     x_out = np.vstack([x_out, x])
@@ -183,23 +194,46 @@ print(end - start)
 
 theta_1 = x_out[:,0]
 theta_2 = x_out[:,1]
+omega_1 = x_out[:,2]
+omega_2 = x_out[:,3]
 
+# Calculate the kartesioan coordinates from the angles
 x2_pos = sub_values[l_2] * np.sin(theta_2)
 y2_pos = sub_values[l_2] * np.cos(theta_2)
 
 x1_pos = sub_values[l_1] * np.sin(theta_1) + x2_pos
 y1_pos = sub_values[l_1] * np.cos(theta_1) + y2_pos
 
-# plt.plot(theta_1, label='theta_1')
-# plt.plot(theta_2, label='theta_2')
-# plt.legend()
+# Plot poles for the open and closed loop system
+fig_pz = plt.figure()
+plt.scatter(e.real, e.imag, label='Open sys')
+plt.scatter(w.real, w.imag, label='Closed')
+plt.grid()
+plt.legend()
+
+# Plot the states and control signal
+fig_sys = plt.figure()
+plt.subplot(3, 1, 1)
+plt.plot(theta_1, label='theta_1')
+plt.plot(theta_2, label='theta_2')
+plt.legend()
+plt.grid()
+
+plt.subplot(3, 1, 2)
+plt.plot(omega_1, label='omega_1')
+plt.plot(omega_2, label='omega_2')
+plt.legend()
+plt.grid()
+
+plt.subplot(3, 1, 3)
+plt.plot(u_t, label='Control signal')
+plt.plot(disturbance, label='disturbance')
+plt.legend()
+plt.grid()
 # plt.show()
 
-plt.plot(u_t)
-plt.show()
-
 fig = plt.figure(figsize=(5, 4))
-ax = fig.add_subplot(autoscale_on=False, xlim=(-3, 3), ylim=(-3, 3))
+ax = fig.add_subplot(autoscale_on=False, xlim=(-3, 3), ylim=(-.5, 5.5))
 line, = ax.plot([], [], 'o-', lw=2)
 
 def animate(i):
@@ -208,5 +242,12 @@ def animate(i):
     line.set_data(thisx, thisy)
     return line
 
+
 ani = animation.FuncAnimation(fig, animate, int(len(x1_pos)/20), interval=dt, blit=False)
+
+# Animate the system
+plt.grid()
+plt.axis('equal')
+
+# Show all plt objects
 plt.show()
