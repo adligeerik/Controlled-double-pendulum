@@ -3,7 +3,8 @@
 The equations of motion are calculated using Lagrangian mechanics. The
 controller is calculated around the linearized point where all rods
 are pointing straight up and the angular velocities are zero. The controller is
-the optimal LQR controller.
+the optimal LQR controller. The control signal `u` is a torque applied to the
+base rod around the origin.
 
 ## Equation of motion
 [![\\ \dot{\theta_1} = \omega_1](https://latex.codecogs.com/svg.latex?%5C%5C%20%5Cdot%7B%5Ctheta_1%7D%20%3D%20%5Comega_1)](#_)\
