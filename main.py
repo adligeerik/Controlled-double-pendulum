@@ -136,9 +136,9 @@ if np.abs(cont_val) < 0.01:
 
 # Check observability of system
 CA = C_lin @ A_lin
-CCA = CA @ A_lin
-CCCA = CCA @ A_lin
-Observability = sp.Matrix.vstack(C_lin, CA, CCA, CCCA)
+CAA = CA @ A_lin
+CAAA = CAA @ A_lin
+Observability = sp.Matrix.vstack(C_lin, CA, CAA, CAAA)
 Observability = Observability.subs(stationary_point).evalf()
 Observability = np.array(Observability).astype(np.float64) # Convert to np array
 rank_observ = np.linalg.matrix_rank(Observability)
@@ -146,7 +146,7 @@ if rank_observ != 4:
     raise "System is not observable"
 
 # Calc the continuous LQR controller
-Q = np.diag([1000, 1, 1, 1])
+Q = np.diag([1, 100, 1, 1])
 R = 1
 P = solve_continuous_are(a = A_stat, b = B_stat, q = Q, r = R)
 K = np.matrix((1/R)*(B_stat.T @ P))
@@ -168,13 +168,15 @@ x = x0
 start = time.time()
 x_out = np.array(x)
 
-n = 3000
+n = 5000
 
 disturbance = np.zeros(n)
-disturbance[200:400] = 0.1
-# disturbance[2000:2400] = -0.1
+# disturbance += np.random.normal(0, 1, size=n)
+# disturbance[100] = 100
+disturbance[200:400] = 0.5
+# disturbance[2000:2400] = -0.5
 stop_u = np.ones(n)
-# stop_u[2000:-1] = 0
+# stop_u[3000:-1] = 0
 u_t = []
 for i in range(n):
     print(i)
@@ -206,8 +208,8 @@ y1_pos = sub_values[l_1] * np.cos(theta_1) + y2_pos
 
 # Plot poles for the open and closed loop system
 fig_pz = plt.figure()
-plt.scatter(e.real, e.imag, label='Open sys')
-plt.scatter(w.real, w.imag, label='Closed')
+plt.scatter(e.real, e.imag, label='Open system poles')
+plt.scatter(w.real, w.imag, label='Closed system poles')
 plt.grid()
 plt.legend()
 
@@ -232,9 +234,10 @@ plt.legend()
 plt.grid()
 # plt.show()
 
-fig = plt.figure(figsize=(5, 4))
-ax = fig.add_subplot(autoscale_on=False, xlim=(-3, 3), ylim=(-.5, 5.5))
+fig = plt.figure(figsize=(5, 5))
+ax = fig.add_subplot(autoscale_on=False, xlim=(-2.5, 2.5), ylim=(-0.5, 4.5))
 line, = ax.plot([], [], 'o-', lw=2)
+plt.grid()
 
 def animate(i):
     thisx = [x1_pos[i*20], x2_pos[i*20], 0]
@@ -243,11 +246,9 @@ def animate(i):
     return line
 
 
+# Animate the system
 ani = animation.FuncAnimation(fig, animate, int(len(x1_pos)/20), interval=dt, blit=False)
 
-# Animate the system
-plt.grid()
-plt.axis('equal')
-
+# plt.axis('equal')
 # Show all plt objects
 plt.show()
