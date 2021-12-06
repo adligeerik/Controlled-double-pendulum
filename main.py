@@ -4,6 +4,8 @@ from sympy.printing.latex import latex
 import sympy as sp
 from sympy import sin, cos, Function
 from scipy.linalg import solve_continuous_are, inv, eig
+from ekf import ExtendedKalmanFilter as EKF
+from filterpy.common import Q_discrete_white_noise
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -77,9 +79,6 @@ theta_ddot_1 = sp.simplify(theta_ddot_1[0])
 theta_ddot_2 = sp.solve(L_theta2, 'Derivative(theta_2(t), (t,2))')
 theta_ddot_2 = sp.simplify(theta_ddot_2[0])
 
-# print(latex(theta_ddot_1))
-# print(latex(theta_ddot_2))
-
 # Change variables
 theta1, theta2, omega1, omega2, omega1_dot, omega2_dot = sp.symbols('theta1 theta2 omega1 omega2 omega1_dot omega2_dot')
 change = {theta_1(t): theta1, theta_2(t): theta2, sp.Derivative(theta_1(t), t): omega1, sp.Derivative(theta_2(t), t): omega2, sp.Derivative(theta_1(t), (t,2)): omega1_dot, sp.Derivative(theta_2(t), (t,2)): omega2_dot}
@@ -88,9 +87,6 @@ L_theta2 = L_theta2.subs(change)
 
 L_theta1 = sp.simplify(L_theta1)
 L_theta2 = sp.simplify(L_theta2)
-
-# print(latex(L_theta1))
-# print(latex(L_theta2))
 
 # Get the system on matrix form
 M, F = sp.linear_eq_to_matrix([L_theta1, L_theta2], [omega1_dot, omega2_dot])
@@ -105,7 +101,7 @@ A_lin = A_cont.jacobian(sp.Matrix([theta1, theta2, omega1, omega2]))
 B_lin = sp.Matrix([[0],[0],[0],[1]])
 # C_lin = sp.Matrix([[1, 0, 0, 0],
 #                  [0, 1, 0 ,0]])
-C_lin = sp.Matrix([[0, 0, 0, 1]])
+C_lin = sp.Matrix([[0, 1, 0, 0]])
 D_lin= sp.Matrix([0])
 
 # Substitute parameters for values
@@ -114,6 +110,21 @@ A_lin = A_lin.subs(sub_values)
 omega_dot_mts = A_cont.subs(sub_values)
 eq_omega1_dot = omega_dot_mts[2]
 eq_omega2_dot = omega_dot_mts[3]
+
+dt = 0.001
+x_dot = np.zeros(4)
+# x0 = np.array([np.pi, np.pi, 0, 0])
+x0 = np.array([0, 0, 0, 0])
+x = x0
+
+# Initialize the kalman filter
+input = sp.symbols('u')
+dx = sp.Matrix([theta1, theta2, omega1, omega2])
+A_non_lin = sp.Matrix([omega1, omega2, eq_omega1_dot, eq_omega2_dot + input])
+R_kf = np.diag([0.05])
+P_kf = np.diag([0.01, 0.01, 0.01, 0.01])
+Q_kf = Q_discrete_white_noise(dim=len(dx), dt=dt, var=0.13)
+ekf = EKF(x0 = x0, P = P_kf, dt = dt, Q = Q_kf, R = R_kf, A_non_lin = A_non_lin, dx = dx, C =  np.array(C_lin).astype(np.float64), input_symbol = input)
 
 # Linearize around stationary point
 stationary_point = {theta1: 0, theta2: 0, omega1: 0, omega2: 0}
@@ -158,18 +169,12 @@ A_closed = A_stat - B_stat @ K
 e, f = eig(A_stat)
 w, v = eig(A_closed)
 
-dt = 0.001
-
-x_dot = np.zeros(4)
-# x0 = np.array([np.pi, np.pi, 0, 0])
-x0 = np.array([0, 0, 0, 0])
-x = x0
-
 start = time.time()
 x_out = np.array(x)
 
-n = 5000
+n = 1000
 
+x_out_hat = np.array(x0)
 disturbance = np.zeros(n)
 # disturbance += np.random.normal(0, 1, size=n)
 # disturbance[100] = 100
@@ -190,6 +195,10 @@ for i in range(n):
 
     x = x + dt * x_dot
     x_out = np.vstack([x_out, x])
+
+    ekf.predict(u=u[0])
+    ekf.update(z=x[1])
+    x_out_hat = np.vstack([x_out_hat, ekf.x_hat])
 
 end = time.time()
 print(end - start)
@@ -218,6 +227,8 @@ fig_sys = plt.figure()
 plt.subplot(3, 1, 1)
 plt.plot(theta_1, label='theta_1')
 plt.plot(theta_2, label='theta_2')
+plt.plot(x_out_hat[0], '--r', label='Estimated theta_1')
+plt.plot(x_out_hat[1], '--b', label='Estimated theta_1')
 plt.legend()
 plt.grid()
 
@@ -232,12 +243,12 @@ plt.plot(u_t, label='Control signal')
 plt.plot(disturbance, label='disturbance')
 plt.legend()
 plt.grid()
-# plt.show()
 
 fig = plt.figure(figsize=(5, 5))
 ax = fig.add_subplot(autoscale_on=False, xlim=(-2.5, 2.5), ylim=(-0.5, 4.5))
 line, = ax.plot([], [], 'o-', lw=2)
 plt.grid()
+
 
 def animate(i):
     thisx = [x1_pos[i*20], x2_pos[i*20], 0]
@@ -249,6 +260,5 @@ def animate(i):
 # Animate the system
 ani = animation.FuncAnimation(fig, animate, int(len(x1_pos)/20), interval=dt, blit=False)
 
-# plt.axis('equal')
 # Show all plt objects
 plt.show()
