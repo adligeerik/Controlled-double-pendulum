@@ -17,7 +17,8 @@ class ExtendedKalmanFilter:
         self.A_non_lin = A_non_lin
         self.fj = A_non_lin.jacobian(dx)
 
-        self.hj = (C @ dx).jacobian(dx)
+        self.hj = np.array((C @ dx).jacobian(dx)).astype(np.float64)
+        print(self.hj)
 
     def predict(self, u: float):
         self.x_hat = self.x_hat + self.dt * self.system(x = self.x_hat, u = u)
@@ -30,22 +31,21 @@ class ExtendedKalmanFilter:
         S = H @ self.P @ H.T + self.R
 
         K = (self.P @ H.T) * np.linalg.inv(S)
-        self.x_hat = self.x_hat + K.ravel() * y_err
+        self.x_hat = self.x_hat + K.ravel().reshape(4, 1) * y_err
         self.P = (self.I - K @ H) @ self.P
 
     def Fjacobian(self, x: np.ndarray, dt: float) -> np.ndarray:
-        val = {self.dx[0]: x[0], self.dx[1]: x[1], self.dx[2]: x[2], self.dx[3]: x[3]}
-        df = np.eye(3) + dt * self.fj.xreplace(val)
-        return df
+        val = {self.dx[0]: x[0][0], self.dx[1]: x[1][0], self.dx[2]: x[2][0], self.dx[3]: x[3][0]}
+        df = self.I + dt * self.fj.xreplace(val)
+        return np.array(df).astype(np.float64)
 
     def system(self, x: np.ndarray, u: float) -> np.ndarray:
-        val = {self.dx[0]: x[0], self.dx[1]: x[1], self.dx[2]: x[2], self.dx[3]: x[3], self.u: u}
+        val = {self.dx[0]: x[0][0], self.dx[1]: x[1][0], self.dx[2]: x[2][0], self.dx[3]: x[3][0], self.u: u}
         x_dot = self.A_non_lin.xreplace(val)
-        print( np.array(x_dot).astype(np.float64))
         return np.array(x_dot).astype(np.float64)
 
     def h(self, x: np.ndarray) -> float:
         return self.C @ x
 
-    def Hjacobian(self) -> float:
+    def Hjacobian(self, x) -> float:
         return self.hj

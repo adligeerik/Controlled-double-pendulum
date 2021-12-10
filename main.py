@@ -114,9 +114,8 @@ eq_omega2_dot = omega_dot_mts[3]
 dt = 0.001
 x_dot = np.zeros(4)
 # x0 = np.array([np.pi, np.pi, 0, 0])
-x0 = np.array([0, 0, 0, 0])
-x = x0
-
+x0 = np.array([0.1, 0.1, 0, 0])
+# x0 = np.array([0, 0, 0, 0])
 # Initialize the kalman filter
 input = sp.symbols('u')
 dx = sp.Matrix([theta1, theta2, omega1, omega2])
@@ -125,6 +124,7 @@ R_kf = np.diag([0.05])
 P_kf = np.diag([0.01, 0.01, 0.01, 0.01])
 Q_kf = Q_discrete_white_noise(dim=len(dx), dt=dt, var=0.13)
 ekf = EKF(x0 = x0, P = P_kf, dt = dt, Q = Q_kf, R = R_kf, A_non_lin = A_non_lin, dx = dx, C =  np.array(C_lin).astype(np.float64), input_symbol = input)
+x_out_hat = np.array(x0.reshape(4, 1))
 
 # Linearize around stationary point
 stationary_point = {theta1: 0, theta2: 0, omega1: 0, omega2: 0}
@@ -169,12 +169,14 @@ A_closed = A_stat - B_stat @ K
 e, f = eig(A_stat)
 w, v = eig(A_closed)
 
-start = time.time()
-x_out = np.array(x)
+x0 = np.array([0, 0, 0, 0])
+x = x0
 
 n = 1000
 
-x_out_hat = np.array(x0)
+start = time.time()
+x_out = np.array(x)
+
 disturbance = np.zeros(n)
 # disturbance += np.random.normal(0, 1, size=n)
 # disturbance[100] = 100
@@ -198,7 +200,7 @@ for i in range(n):
 
     ekf.predict(u=u[0])
     ekf.update(z=x[1])
-    x_out_hat = np.vstack([x_out_hat, ekf.x_hat])
+    x_out_hat = np.hstack([x_out_hat, ekf.x_hat])
 
 end = time.time()
 print(end - start)
@@ -225,10 +227,10 @@ plt.legend()
 # Plot the states and control signal
 fig_sys = plt.figure()
 plt.subplot(3, 1, 1)
+plt.plot(x_out_hat[0,:], '--r', label='Estimated theta_1')
+plt.plot(x_out_hat[1,:], '--b', label='Estimated theta_2')
 plt.plot(theta_1, label='theta_1')
 plt.plot(theta_2, label='theta_2')
-plt.plot(x_out_hat[0], '--r', label='Estimated theta_1')
-plt.plot(x_out_hat[1], '--b', label='Estimated theta_1')
 plt.legend()
 plt.grid()
 
