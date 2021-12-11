@@ -10,6 +10,8 @@ class ExtendedKalmanFilter:
         self.R = R
         self.I = np.eye(len(x0))
         self.C = C
+        self.n = C.shape[1]
+        self.m = C.shape[0]
 
         self.u = input_symbol
 
@@ -30,8 +32,8 @@ class ExtendedKalmanFilter:
         H = self.Hjacobian(self.x_hat)
         S = H @ self.P @ H.T + self.R
 
-        K = (self.P @ H.T) * np.linalg.inv(S)
-        self.x_hat = self.x_hat + K.ravel().reshape(4, 1) * y_err
+        K = (self.P @ H.T) @ np.linalg.inv(S)
+        self.x_hat = self.x_hat + K.ravel().reshape(self.n, self.m) @ y_err
         self.P = (self.I - K @ H) @ self.P
 
     def Fjacobian(self, x: np.ndarray, dt: float) -> np.ndarray:

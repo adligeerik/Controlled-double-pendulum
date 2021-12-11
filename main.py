@@ -99,9 +99,9 @@ A_cont = A_cont.row_insert(1, sp.Matrix([omega2]))
 # Linearize (calc the jacobian)
 A_lin = A_cont.jacobian(sp.Matrix([theta1, theta2, omega1, omega2]))
 B_lin = sp.Matrix([[0],[0],[0],[1]])
-# C_lin = sp.Matrix([[1, 0, 0, 0],
-#                  [0, 1, 0 ,0]])
-C_lin = sp.Matrix([[0, 1, 0, 0]])
+C_lin = sp.Matrix([[1, 0, 0, 0],
+                   [0, 1, 0, 0]])
+# C_lin = sp.Matrix([[0, 1, 0, 0]])
 D_lin= sp.Matrix([0])
 
 # Substitute parameters for values
@@ -114,13 +114,13 @@ eq_omega2_dot = omega_dot_mts[3]
 dt = 0.001
 x_dot = np.zeros(4)
 # x0 = np.array([np.pi, np.pi, 0, 0])
-x0 = np.array([0.1, 0.1, 0, 0])
+x0 = np.array([0, 0, 0, 0])
 # x0 = np.array([0, 0, 0, 0])
 # Initialize the kalman filter
 input = sp.symbols('u')
 dx = sp.Matrix([theta1, theta2, omega1, omega2])
 A_non_lin = sp.Matrix([omega1, omega2, eq_omega1_dot, eq_omega2_dot + input])
-R_kf = np.diag([0.05])
+R_kf = np.diag([0.05, 0.05])
 P_kf = np.diag([0.01, 0.01, 0.01, 0.01])
 Q_kf = Q_discrete_white_noise(dim=len(dx), dt=dt, var=0.13)
 ekf = EKF(x0 = x0, P = P_kf, dt = dt, Q = Q_kf, R = R_kf, A_non_lin = A_non_lin, dx = dx, C =  np.array(C_lin).astype(np.float64), input_symbol = input)
@@ -164,15 +164,15 @@ K = np.matrix((1/R)*(B_stat.T @ P))
 K = np.array(K).astype(np.float64) # Convert to np array
 
 # Plot pole zero map
-sys = StateSpace(A_stat, B_stat, C_stat, D_stat)
-A_closed = A_stat - B_stat @ K
-e, f = eig(A_stat)
-w, v = eig(A_closed)
+# sys = StateSpace(A_stat, B_stat, C_stat, D_stat)
+# A_closed = A_stat - B_stat @ K
+# e, f = eig(A_stat)
+# w, v = eig(A_closed)
 
 x0 = np.array([0, 0, 0, 0])
 x = x0
 
-n = 1000
+n = 5000
 
 start = time.time()
 x_out = np.array(x)
@@ -199,7 +199,8 @@ for i in range(n):
     x_out = np.vstack([x_out, x])
 
     ekf.predict(u=u[0])
-    ekf.update(z=x[1])
+    ekf.update(z=np.array([x[0], x[1]]).reshape(2, 1))
+    # ekf.update(z=x[1])
     x_out_hat = np.hstack([x_out_hat, ekf.x_hat])
 
 end = time.time()
@@ -217,12 +218,12 @@ y2_pos = sub_values[l_2] * np.cos(theta_2)
 x1_pos = sub_values[l_1] * np.sin(theta_1) + x2_pos
 y1_pos = sub_values[l_1] * np.cos(theta_1) + y2_pos
 
-# Plot poles for the open and closed loop system
-fig_pz = plt.figure()
-plt.scatter(e.real, e.imag, label='Open system poles')
-plt.scatter(w.real, w.imag, label='Closed system poles')
-plt.grid()
-plt.legend()
+# # Plot poles for the open and closed loop system
+# fig_pz = plt.figure()
+# plt.scatter(e.real, e.imag, label='Open system poles')
+# plt.scatter(w.real, w.imag, label='Closed system poles')
+# plt.grid()
+# plt.legend()
 
 # Plot the states and control signal
 fig_sys = plt.figure()
@@ -235,6 +236,8 @@ plt.legend()
 plt.grid()
 
 plt.subplot(3, 1, 2)
+plt.plot(x_out_hat[2,:], '--r', label='Estimated omega_1')
+plt.plot(x_out_hat[3,:], '--b', label='Estimated omega_2')
 plt.plot(omega_1, label='omega_1')
 plt.plot(omega_2, label='omega_2')
 plt.legend()
