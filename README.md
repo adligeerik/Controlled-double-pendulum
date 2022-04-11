@@ -1,4 +1,4 @@
-# Double pendelum
+    # Double pendelum
 
 The equations of motion are calculated using Lagrangian mechanics. The
 controller is calculated around the linearized point where all rods

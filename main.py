@@ -61,7 +61,7 @@ T = sp.simplify(T)
 L = T - V
 L = sp.simplify(L)
 
-#Solve the d/dt(dL/dq_dot) part of the Lagrangeian
+# Solve the d/dt(dL/dq_dot) part of the Lagrangeian
 d_1_1 = sp.diff(sp.diff(L, 'Derivative(theta_1(t), t)'), 't')
 d_2_1 = sp.diff(sp.diff(L, 'Derivative(theta_2(t), t)'), 't')
 
@@ -120,8 +120,8 @@ x0 = np.array([0, 0, 0, 0])
 input = sp.symbols('u')
 dx = sp.Matrix([theta1, theta2, omega1, omega2])
 A_non_lin = sp.Matrix([omega1, omega2, eq_omega1_dot, eq_omega2_dot + input])
-R_kf = np.diag([0.05, 0.05])
-P_kf = np.diag([0.01, 0.01, 0.01, 0.01])
+R_kf = np.diag([0.5, 0.5])
+P_kf = np.diag([0.01, 0.01, 0.1, 0.1])
 Q_kf = Q_discrete_white_noise(dim=len(dx), dt=dt, var=0.13)
 ekf = EKF(x0 = x0, P = P_kf, dt = dt, Q = Q_kf, R = R_kf, A_non_lin = A_non_lin, dx = dx, C =  np.array(C_lin).astype(np.float64), input_symbol = input)
 x_out_hat = np.array(x0.reshape(4, 1))
@@ -163,13 +163,19 @@ P = solve_continuous_are(a = A_stat, b = B_stat, q = Q, r = R)
 K = np.matrix((1/R)*(B_stat.T @ P))
 K = np.array(K).astype(np.float64) # Convert to np array
 
+# Convert sympy expression to lambda function to decrease computation cost
+symbols_omega1 = list(eq_omega1_dot.free_symbols)
+l_dot_omega1 = sp.lambdify(symbols_omega1, eq_omega1_dot, "numpy")
+symbols_omega2 = list(eq_omega2_dot.free_symbols)
+l_dot_omega2 = sp.lambdify(symbols_omega2, eq_omega2_dot, "numpy")
+
 # Plot pole zero map
 # sys = StateSpace(A_stat, B_stat, C_stat, D_stat)
 # A_closed = A_stat - B_stat @ K
 # e, f = eig(A_stat)
 # w, v = eig(A_closed)
 
-x0 = np.array([0, 0, 0, 0])
+x0 = np.array([0.1, 0.1, 0, 0])
 x = x0
 
 n = 5000
@@ -180,20 +186,20 @@ x_out = np.array(x)
 disturbance = np.zeros(n)
 # disturbance += np.random.normal(0, 1, size=n)
 # disturbance[100] = 100
-disturbance[200:400] = 0.5
+disturbance[200:400] = 0
 # disturbance[2000:2400] = -0.5
 stop_u = np.ones(n)
 # stop_u[3000:-1] = 0
 u_t = []
 for i in range(n):
     print(i)
-    x_val = {theta1: x[0], theta2: x[1], omega1: x[2], omega2: x[3]}
+    x_val = {"theta1": x[0], "theta2": x[1], "omega1": x[2], "omega2": x[3]}
     u = -K @ x
     u_t.append(u)
-    x_dot[0] = x_val[omega1]
-    x_dot[1] = x_val[omega2]
-    x_dot[2] = eq_omega1_dot.xreplace(x_val) + disturbance[i]
-    x_dot[3] = eq_omega2_dot.xreplace(x_val) + u * stop_u[i]
+    x_dot[0] = x_val["omega1"]
+    x_dot[1] = x_val["omega2"]
+    x_dot[2] = l_dot_omega1(**x_val) + disturbance[i]
+    x_dot[3] = l_dot_omega2(**x_val) + u * stop_u[i]
 
     x = x + dt * x_dot
     x_out = np.vstack([x_out, x])
