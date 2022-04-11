@@ -1,4 +1,4 @@
-    # Double pendelum
+# Double pendelum
 
 The equations of motion are calculated using Lagrangian mechanics. The
 controller is calculated around the linearized point where all rods
@@ -23,3 +23,8 @@ Double pendelum without controller.
 
 ![poles](img/cont_pend.gif) \
 Pendelum with controller.
+
+## Extended Kalman filter
+
+![ekf](img/ekf.png) \
+Kalman filter to estimate the current state.

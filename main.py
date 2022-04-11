@@ -178,7 +178,7 @@ l_dot_omega2 = sp.lambdify(symbols_omega2, eq_omega2_dot, "numpy")
 x0 = np.array([0.1, 0.1, 0, 0])
 x = x0
 
-n = 5000
+n = 2000
 
 start = time.time()
 x_out = np.array(x)
